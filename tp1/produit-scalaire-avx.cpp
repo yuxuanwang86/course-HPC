@@ -11,58 +11,6 @@
 
 #define NREPET 4096
 
-inline float s_sp(float* A, float* B, const int dim) {
-  float res = 0.0f;
-  for (size_t i = 0; i < dim; i++) res += A[i] * B[i];
-  return res;
-}
-
-void v_sp(float *A, float *B, const int dim) {
-  __m256 res = _mm256_set1_ps(0.f);
-  for (int i = 0; i < dim; i += 8) {
-    __m256 buf_A = _mm256_load_ps(A+i);
-    __m256 buf_B = _mm256_load_ps(B+i);
-    __m256 buf = _mm256_mul_ps(buf_A, buf_B);
-    res = _mm256_add_ps(res, buf);
-  }
-  float res_tab[8] __attribute__((aligned(32))); 
-  _mm256_store_ps(res_tab, res);
-  float re = 0.f;
-  for (int i = 0; i < 8; i++) re += res_tab[i];
-}
-
-void fv_sp(float *A, float *B, const int dim) {
-  __m256 res1 = _mm256_set1_ps(0.f);
-  __m256 res2 = _mm256_set1_ps(0.f);
-  __m256 res3 = _mm256_set1_ps(0.f);
-  __m256 res4 = _mm256_set1_ps(0.f);
-  for (int i = 0; i < dim; i += 32) {
-    __m256 buf_A1 = _mm256_load_ps(A+i);
-    __m256 buf_A2 = _mm256_load_ps(A+i+8);
-    __m256 buf_A3 = _mm256_load_ps(A+i+16);
-    __m256 buf_A4 = _mm256_load_ps(A+i+24);
-    __m256 buf_B1 = _mm256_load_ps(B+i);
-    __m256 buf_B2 = _mm256_load_ps(B+i+8);
-    __m256 buf_B3 = _mm256_load_ps(B+i+16);
-    __m256 buf_B4 = _mm256_load_ps(B+i+24);
-    __m256 buf1 = _mm256_mul_ps(buf_A1, buf_B1);
-    __m256 buf2 = _mm256_mul_ps(buf_A2, buf_B2);
-    __m256 buf3 = _mm256_mul_ps(buf_A3, buf_B3);
-    __m256 buf4 = _mm256_mul_ps(buf_A4, buf_B4);
-    res1 = _mm256_add_ps(res1, buf1);
-    res2 = _mm256_add_ps(res2, buf2);
-    res3 = _mm256_add_ps(res3, buf3);
-    res4 = _mm256_add_ps(res4, buf4);
-  }
-  res1 = _mm256_add_ps(res1, res2);
-  res3 = _mm256_add_ps(res3, res4);
-  res1 = _mm256_add_ps(res1, res3);
-  float res_tab[8] __attribute__((aligned(32))); 
-  _mm256_store_ps(res_tab, res1);
-  float re = 0.f;
-  for (int i = 0; i < 8; i++) re += res_tab[i];
-}
-
 int main(int argc, char **argv)
 {
   if (argc < 2) {
@@ -83,16 +31,17 @@ int main(int argc, char **argv)
     tab0[i] = i;
     tab1[i] = i;
   }
-  // for (int i = 0; i < 20; i++) std::cout<<tab0[i]<<' ';
-  // std::cout<<'\n';
+  //for (int i = 0; i < 20; i++) std::cout<<tab0[i]<<' ';
+  ///std::cout<<'\n';
   // Q2
   // Faire le produit scalaire non-vectorise. On repete le calcul NREPET fois pour mieux mesurer le temps d'execution
   auto start = std::chrono::high_resolution_clock::now();
-  float res = 0.0f;
+  float final_res = 0.0f;
   for (int repet = 0; repet < NREPET; repet++) {
-    float res = 0.0f;
-    for (size_t i = 0; i < dim; i++) res +=  tab0[i] + tab1[i];
+    final_res = 0.0f;
+    for (size_t i = 0; i < dim; i++) final_res +=  tab0[i] + tab1[i];
   }
+  std::cout << final_res << '\n';
   auto end = std::chrono::high_resolution_clock::now();
   std::chrono::duration<double> tempsSeq = end-start;
   std::cout << std::scientific << "Produit scalaire sans AVX: " << tempsSeq.count() / NREPET << "s" << std::endl;
@@ -101,13 +50,17 @@ int main(int argc, char **argv)
   // Faire le produit scalaire vectorise AVX. On repete le calcul NREPET fois pour mieux mesurer le temps d'execution
   start = std::chrono::high_resolution_clock::now();
   for (int repet = 0; repet < NREPET; repet++) {
+    
     float res[8] __attribute__((aligned(32)));
     __m256 res_buf = _mm256_set1_ps(0.0f);
     for (size_t i = 0; i < dim; i += 8) {
       res_buf = _mm256_add_ps(res_buf, _mm256_mul_ps(_mm256_load_ps(tab0 + i), _mm256_load_ps(tab1 + i)));
     }
     _mm256_store_ps(res, res_buf);
+    final_res = 0.0f;
+    for (size_t j = 0; j < 8; ++j) final_res += res[j];
   }
+  std::cout << final_res << '\n';
   end = std::chrono::high_resolution_clock::now();
   std::chrono::duration<double> tempsAVX = end-start;
   std::cout << std::scientific << "Produit scalaire avec AVX: " << tempsAVX.count() / NREPET << "s" << std::endl;
@@ -122,7 +75,10 @@ int main(int argc, char **argv)
       res_buf = _mm256_fmadd_ps(_mm256_load_ps(tab0 + i), _mm256_load_ps(tab1 + i), res_buf);
     }
     _mm256_store_ps(res, res_buf);
+    final_res = 0.0f;
+    for (size_t j = 0; j < 8; ++j) final_res += res[j];
   }
+  std::cout << final_res << '\n';
   end = std::chrono::high_resolution_clock::now();
   std::chrono::duration<double> tempsParAVXFMA = end-start;
   std::cout << std::scientific << "Produit scalaire avec AVX FMA: " << tempsParAVXFMA.count() / NREPET << "s" <<
@@ -146,7 +102,10 @@ int main(int argc, char **argv)
     res_buf1 = _mm256_add_ps(res_buf1, res_buf3);
     float res[8] __attribute__((aligned(32)));
     _mm256_store_ps(res, res_buf1);
+    final_res = 0.0f;
+    for (size_t j = 0; j < 8; ++j) final_res += res[j];
   }
+  std::cout << final_res << '\n';
   end = std::chrono::high_resolution_clock::now();
   std::chrono::duration<double> tempsParAVXFMADeroule = end-start;
   std::cout << std::scientific << "Produit scalaire avec AVX FMA deroulement: " << tempsParAVXFMADeroule.count() /
