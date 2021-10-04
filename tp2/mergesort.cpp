@@ -3,15 +3,19 @@
 #include <string.h>
 #include <omp.h>
 #include <assert.h>
+#include <iostream>
+#include <chrono>
 
 #define SWAP(a,b) {int tmp = a; a = b; b = tmp;}
-#define SIZE 1024
+#define SIZE 1000000000
+
 
 void verify(int* a, int size);
 void merge(int* a, int size, int* temp);
-void mergesort(int* a, int size, int* temp);
+void mergesort(int* a, int size, int* temp, const int& K);
 
 int main(int argc, char** argv) {
+  const int K = std::atoi(argv[1]);
   int* a;
   int* temp;
   double inicio, fim;
@@ -29,8 +33,12 @@ int main(int argc, char** argv) {
   }
 
   //sort
-  mergesort(a, size, temp);
-
+  auto start = std::chrono::high_resolution_clock::now();
+  #pragma omp parallel
+  #pragma omp single
+  mergesort(a, size, temp, K);
+  std::chrono::duration<double> temps = std::chrono::high_resolution_clock::now() - start;
+  std::cout << std::scientific << "Temps d'execution: " << temps.count() << "s" << std::endl;
   verify(a, size);
 }
 
@@ -49,7 +57,7 @@ void merge(int* a, int size, int* temp) {
   int i2 = size / 2;
   int it = 0;
 
-  while(i1 < size/2 && i2 < size) {
+  while(i1 < size / 2 && i2 < size) {
     if (a[i1] <= a[i2]) {
       temp[it] = a[i1];
       i1 += 1;
@@ -75,7 +83,7 @@ void merge(int* a, int size, int* temp) {
   memcpy(a, temp, size*sizeof(int));
 }
 
-void mergesort(int* a, int size, int* temp) {
+void mergesort(int* a, int size, int* temp, const int& K) {
   if (size < 2) return;   //nothing to sort
   if (size == 2) {        //only two values to sort
     if (a[0] <= a[1])
@@ -85,8 +93,11 @@ void mergesort(int* a, int size, int* temp) {
       return;
     }
   } else {                //mergesort
-    mergesort(a, size/2, temp);
-    mergesort(a + size/2, size - size/2, temp + size/2); //a + size/2: pointer arithmetic
+    #pragma omp task if (size > K)
+    mergesort(a, size/2, temp, K);
+    #pragma omp task if (size > K)
+    mergesort(a + size/2, size - size/2, temp + size/2, K); //a + size/2: pointer arithmetic
+    #pragma omp taskwait
     merge(a, size, temp);
   }
   return;
