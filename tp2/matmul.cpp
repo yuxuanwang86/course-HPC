@@ -2,18 +2,18 @@
 #include <chrono>
 #include <vector>
 #include "omp.h"
-#define N 10
-#define T 2
+#define N 4096
+#define T 32
 
 // N == 20, T == 2 -> 4 elem in each bloc
 // C[0*0 + 0], C[0*0 + 1]
-const int elem_per_bloc = T * T;
+
 const int num_bloc = N / T;
 void mat_mul(std::vector<int>& A, std::vector<int>& B, std::vector<int>& C, int i, int j, int k) {
-    for (int b = 0; b < num_bloc; b++) {
-
-        C[i + b * N + j] += A[i + b * N + k] * B[i + b * N + k];
-           
+    for (int b_i = 0; b_i < num_bloc; b_i++) {
+        for (int b_j = 0; b_j < num_bloc; b_j++)
+            for (int b_k = 0; b_k < num_bloc; b_k++)
+                C[i * num_bloc * N + j * num_bloc + b_i * N + b_j] += A[i * num_bloc * N + k * num_bloc + b_i * N + b_k] * B[j * num_bloc * N + k * num_bloc + b_j * N + b_k];    
     }
 }
 
@@ -44,11 +44,11 @@ int main(int argc, char **argv)
     std::cout << "Temps: " << temps.count() << "s\n";
 
 
-    for (int i = 0; i < N; i++) {
-        for (int j = 0; j < N; j++) {
-            std::cout<<C[i * N + j]<<' ';
-        }
-        std::cout<<std::endl;
-    }
+    // for (int i = 0; i < N; i++) {
+    //     for (int j = 0; j < N; j++) {
+    //         std::cout<<C[i * N + j]<<'\t';
+    //     }
+    //     std::cout<<std::endl;
+    // }
     return 0;
 }
