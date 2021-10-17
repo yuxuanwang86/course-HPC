@@ -2,19 +2,24 @@
 #include <chrono>
 #include <vector>
 #include "omp.h"
-#define N 4096
-#define T 32
+#define N 8
+#define T 4
 
-// N == 20, T == 2 -> 4 elem in each bloc
-// C[0*0 + 0], C[0*0 + 1]
+
 
 const int num_bloc = N / T;
-void mat_mul(std::vector<int>& A, std::vector<int>& B, std::vector<int>& C, int i, int j, int k) {
-    for (int b_i = 0; b_i < num_bloc; b_i++) {
-        for (int b_j = 0; b_j < num_bloc; b_j++)
-            for (int b_k = 0; b_k < num_bloc; b_k++)
-                C[i * num_bloc * N + j * num_bloc + b_i * N + b_j] += A[i * num_bloc * N + k * num_bloc + b_i * N + b_k] * B[j * num_bloc * N + k * num_bloc + b_j * N + b_k];    
+void mat_mul(std::vector<int>& A, std::vector<int>& B, std::vector<int>& C, int b_i, int b_j, int b_k) {
+    
+    #pragma omp for collapse(3)
+    for (int i = 0; i < T; i++) {
+        for (int j = 0; j < T; j++) {
+             for (int k = 0; k < T; k++) {
+                #pragma omp reduction(+: C[i *  N + b_i * T * N + b_j * T + j])
+                C[i *  N + b_i * T * N + b_j * T + j] += A[i *  N + b_i * T * N  + b_k * T + k] * B[j *  N + b_j * T * N + b_k * T + k];    
+            }
+        }
     }
+    
 }
 
 int main(int argc, char **argv)
@@ -24,18 +29,23 @@ int main(int argc, char **argv)
     std::vector<int> B_T(N * N);
     std::vector<int> C(N * N);
     for (int i = 0; i < N*N; i++) {
-        A[i] = B_T[i] = 1;
+        A[i] = i;
+        B_T[i] = i + 1;
         C[i] = 0;
     }
 
     auto start = std::chrono::high_resolution_clock::now();
-
-    for (int i = 0; i < T; i++) {
-        for (int j = 0; j < T; j++) {
-            for (int k = 0; k < T; k++)
-                mat_mul(A, B_T, C, i, j, k);
+    std::cout<<"yo";
+    #pragma omp parallel shared(A, B_T, C, num_bloc)
+    {
+        #pragma omp single 
+        for (int b_i = 0; b_i < num_bloc; b_i++) {
+            for (int b_j = 0; b_j < num_bloc; b_j++) {
+                for (int b_k = 0; b_k < num_bloc; b_k++) { mat_mul(A, B_T, C, b_i, b_j, b_k); }
+            }
         }
-    }
+    } 
+    
     
     
     
@@ -44,11 +54,11 @@ int main(int argc, char **argv)
     std::cout << "Temps: " << temps.count() << "s\n";
 
 
-    // for (int i = 0; i < N; i++) {
-    //     for (int j = 0; j < N; j++) {
-    //         std::cout<<C[i * N + j]<<'\t';
-    //     }
-    //     std::cout<<std::endl;
-    // }
+    for (int i = 0; i < N; i++) {
+        for (int j = 0; j < N; j++) {
+            std::cout<<C[i * N + j]<<'\t';
+        }
+        std::cout<<std::endl;
+    }
     return 0;
 }
